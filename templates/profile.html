@@ -233,12 +233,17 @@
         </div>
 
         <div class="profile-card">
-            <h3 class="card-title">Category breakdown</h3>
-            <div class="category-list">
+            <h3 class="card-title">By Category</h3>
+            <div class="category-bar-list">
                 {% for category in categories %}
-                <div class="category-item">
-                    <span class="category-name">{{ category[0] }}</span>
-                    <span class="category-amount">₹{{ category[1] }}</span>
+                <div class="category-bar-item">
+                    <div class="category-bar-row">
+                        <span class="category-bar-name">{{ category[0] }}</span>
+                        <span class="category-bar-amount">₹{{ category[1] }}</span>
+                    </div>
+                    <div class="category-bar-track">
+                        <div class="category-bar-fill" style="width: {{ category[2] }}%;"></div>
+                    </div>
                 </div>
                 {% endfor %}
             </div>

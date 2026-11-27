@@ -265,9 +265,14 @@ def profile():
             f"{t['amount']:.2f}"
         ))
 
-    # Format categories for template
+    # Format categories for template (name, formatted amount, width % for bar)
+    # Bar widths are based on the percentage of total expenses within the filtered period.
     categories = [
-        (cat["name"], f"{cat['amount']:.2f}")
+        (
+            cat["name"],
+            f"{cat['amount']:.2f}",
+            cat["pct"],
+        )
         for cat in category_breakdown
     ]
 
