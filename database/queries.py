@@ -1,0 +1,162 @@
+from datetime import datetime
+from database.db import get_db
+
+
+def get_user_by_id(user_id):
+    """Return user info dict with name, email, member_since for a given user_id."""
+    conn = get_db()
+    try:
+        user = conn.execute(
+            "SELECT name, email, created_at FROM users WHERE id = ?",
+            (user_id,)
+        ).fetchone()
+        if not user:
+            return None
+        # Format member_since as "Month YYYY"
+        created_at = user["created_at"]
+        if created_at:
+            try:
+                dt = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                member_since = dt.strftime("%B %Y")
+            except ValueError:
+                member_since = "Unknown"
+        else:
+            member_since = "Unknown"
+        return {
+            "name": user["name"],
+            "email": user["email"],
+            "member_since": member_since
+        }
+    finally:
+        conn.close()
+
+
+def get_summary_stats(user_id, date_from=None, date_to=None):
+    """Return dict with total_spent, transaction_count, top_category, top_category_amount for a user."""
+    conn = get_db()
+    try:
+        # Build date filter
+        date_filter = ""
+        params = [user_id]
+        if date_from and date_to:
+            date_filter = " AND date BETWEEN ? AND ?"
+            params.extend([date_from, date_to])
+
+        # Get total spent and transaction count
+        row = conn.execute(
+            f"SELECT COALESCE(SUM(amount), 0) as total_spent, COUNT(*) as transaction_count "
+            f"FROM expenses WHERE user_id = ?{date_filter}",
+            params
+        ).fetchone()
+
+        total_spent = row["total_spent"] or 0
+        transaction_count = row["transaction_count"] or 0
+
+        # Get top category by total amount spent
+        top_cat_row = conn.execute(
+            f"SELECT category, SUM(amount) as cat_total "
+            f"FROM expenses WHERE user_id = ?{date_filter} "
+            f"GROUP BY category ORDER BY cat_total DESC LIMIT 1",
+            params
+        ).fetchone()
+
+        top_category = top_cat_row["category"] if top_cat_row else "—"
+        top_category_amount = top_cat_row["cat_total"] if top_cat_row else 0
+
+        return {
+            "total_spent": total_spent,
+            "transaction_count": transaction_count,
+            "top_category": top_category,
+            "top_category_amount": top_category_amount
+        }
+    finally:
+        conn.close()
+
+
+def get_recent_transactions(user_id, limit=10, date_from=None, date_to=None):
+    """Return list of recent transactions for a user, newest first."""
+    conn = get_db()
+    try:
+        # Build date filter
+        date_filter = ""
+        params = [user_id]
+        if date_from and date_to:
+            date_filter = " AND date BETWEEN ? AND ?"
+            params.extend([date_from, date_to])
+        params.append(limit)
+
+        rows = conn.execute(
+            f"SELECT date, description, category, amount "
+            f"FROM expenses WHERE user_id = ?{date_filter} "
+            f"ORDER BY date DESC, id DESC LIMIT ?",
+            params
+        ).fetchall()
+
+        transactions = []
+        for row in rows:
+            transactions.append({
+                "date": row["date"],
+                "description": row["description"] or "",
+                "category": row["category"],
+                "amount": row["amount"]
+            })
+        return transactions
+    finally:
+        conn.close()
+
+
+def get_category_breakdown(user_id, date_from=None, date_to=None):
+    """Return list of category breakdown with percentages summing to 100."""
+    conn = get_db()
+    try:
+        # Build date filter
+        date_filter = ""
+        params = [user_id]
+        if date_from and date_to:
+            date_filter = " AND date BETWEEN ? AND ?"
+            params.extend([date_from, date_to])
+
+        rows = conn.execute(
+            f"SELECT category, SUM(amount) as total "
+            f"FROM expenses WHERE user_id = ?{date_filter} "
+            f"GROUP BY category ORDER BY total DESC",
+            params
+        ).fetchall()
+
+        if not rows:
+            return []
+
+        # Calculate total across all categories
+        grand_total = sum(row["total"] for row in rows)
+
+        # Calculate percentages with integer rounding
+        breakdown = []
+        for row in rows:
+            pct = round((row["total"] / grand_total) * 100) if grand_total > 0 else 0
+            breakdown.append({
+                "name": row["category"],
+                "amount": row["total"],
+                "pct": pct
+            })
+
+        # Adjust largest category to absorb rounding remainder
+        total_pct = sum(item["pct"] for item in breakdown)
+        if total_pct != 100 and breakdown:
+            diff = 100 - total_pct
+            # Distribute diff across categories starting from largest
+            # to avoid negative percentages when diff is negative
+            i = 0
+            while diff != 0 and i < len(breakdown):
+                if diff > 0 or breakdown[i]["pct"] > 0:
+                    # Only adjust if we're adding or if category has positive pct
+                    new_pct = breakdown[i]["pct"] + diff
+                    if new_pct >= 0:
+                        breakdown[i]["pct"] = new_pct
+                        diff = 0
+                    else:
+                        diff = new_pct  # remaining negative diff
+                i += 1
+
+        return breakdown
+    finally:
+        conn.close()

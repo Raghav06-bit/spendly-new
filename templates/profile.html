@@ -175,6 +175,28 @@
         </div>
     </div>
 
+    <!-- Date Filter Bar -->
+    <div class="filter-bar">
+        <div class="filter-presets">
+            <a href="{{ preset_urls.this_month }}" class="filter-preset-btn {% if active_preset == 'this_month' %}active{% endif %}">This Month</a>
+            <a href="{{ preset_urls.last_3_months }}" class="filter-preset-btn {% if active_preset == 'last_3_months' %}active{% endif %}">Last 3 Months</a>
+            <a href="{{ preset_urls.last_6_months }}" class="filter-preset-btn {% if active_preset == 'last_6_months' %}active{% endif %}">Last 6 Months</a>
+            <a href="{{ preset_urls.all }}" class="filter-preset-btn {% if active_preset == 'all' %}active{% endif %}">All Time</a>
+        </div>
+        <form method="GET" class="filter-custom" action="{{ url_for('profile') }}">
+            <div class="filter-date-group">
+                <label for="date_from" class="visually-hidden">From</label>
+                <input type="date" id="date_from" name="date_from" class="filter-date-input" value="{{ date_from or '' }}">
+            </div>
+            <span class="filter-date-separator">to</span>
+            <div class="filter-date-group">
+                <label for="date_to" class="visually-hidden">To</label>
+                <input type="date" id="date_to" name="date_to" class="filter-date-input" value="{{ date_to or '' }}">
+            </div>
+            <button type="submit" class="btn-primary">Apply</button>
+        </form>
+    </div>
+
     <div class="profile-stats">
         {% for stat in stats %}
         <div class="stat-card">
@@ -211,12 +233,17 @@
         </div>
 
         <div class="profile-card">
-            <h3 class="card-title">Category breakdown</h3>
-            <div class="category-list">
+            <h3 class="card-title">By Category</h3>
+            <div class="category-bar-list">
                 {% for category in categories %}
-                <div class="category-item">
-                    <span class="category-name">{{ category[0] }}</span>
-                    <span class="category-amount">₹{{ category[1] }}</span>
+                <div class="category-bar-item">
+                    <div class="category-bar-row">
+                        <span class="category-bar-name">{{ category[0] }}</span>
+                        <span class="category-bar-amount">₹{{ category[1] }}</span>
+                    </div>
+                    <div class="category-bar-track">
+                        <div class="category-bar-fill" style="width: {{ category[2] }}%;"></div>
+                    </div>
                 </div>
                 {% endfor %}
             </div>

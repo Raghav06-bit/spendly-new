@@ -6,6 +6,9 @@ from app import app
 def client():
     app.config["TESTING"] = True
     app.secret_key = "test-secret-key"
+    import os
+    if os.path.exists("spendly.db"):
+        os.remove("spendly.db")
     with app.test_client() as client:
         with app.app_context():
             from database.db import init_db, seed_db

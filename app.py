@@ -1,9 +1,17 @@
+import os
+from datetime import datetime
 from flask import Flask, render_template, request, redirect, url_for, session, flash
 from werkzeug.security import generate_password_hash, check_password_hash
 from database.db import get_db, init_db, seed_db
+from database.queries import (
+    get_user_by_id,
+    get_summary_stats,
+    get_recent_transactions,
+    get_category_breakdown,
+)
 
 app = Flask(__name__)
-app.secret_key = 'dev-secret-key-change-in-production'
+app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
 
 # Initialize database on startup
 with app.app_context():
@@ -46,7 +54,6 @@ def register():
             ).fetchone()
 
             if existing:
-                conn.close()
                 return render_template(
                     "register.html",
                     error="Email address is already registered.",
@@ -87,11 +94,11 @@ def login():
                 email=email,
             )
 
-        # Look up user by email (case-insensitive)
+        # Look up user by email (emails stored lowercase)
         conn = get_db()
         try:
             user = conn.execute(
-                "SELECT * FROM users WHERE LOWER(email) = LOWER(?)", (email,)
+                "SELECT * FROM users WHERE email = ?", (email,)
             ).fetchone()
 
             if not user or not check_password_hash(user["password_hash"], password):
@@ -134,42 +141,159 @@ def logout():
     return redirect(url_for("landing"))
 
 
+def _parse_date(date_str):
+    """Parse ISO date string, return None if invalid."""
+    if not date_str:
+        return None
+    try:
+        return datetime.strptime(date_str, "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+def _get_preset_dates(preset):
+    """Return (date_from, date_to) tuple for a preset, or (None, None) for 'all'."""
+    today = datetime.now().date()
+    if preset == "this_month":
+        date_from = today.replace(day=1)
+        date_to = today
+    elif preset == "last_3_months":
+        # 3 months ago, first day of that month
+        month = today.month - 3
+        year = today.year
+        if month <= 0:
+            month += 12
+            year -= 1
+        date_from = today.replace(year=year, month=month, day=1)
+        date_to = today
+    elif preset == "last_6_months":
+        # 6 months ago, first day of that month
+        month = today.month - 6
+        year = today.year
+        if month <= 0:
+            month += 12
+            year -= 1
+        date_from = today.replace(year=year, month=month, day=1)
+        date_to = today
+    else:  # "all" or unknown
+        return None, None
+    return date_from, date_to
+
+
 @app.route("/profile")
 def profile():
     if "user_id" not in session:
         flash("Please sign in to view your profile.", "error")
         return redirect(url_for("login"))
 
-    # Hardcoded context for the UI-first stub (Step 4).
-    profile = {
-        "name": "Demo User",
-        "email": "demo@spendly.com",
-        "member_since": "March 2025",
-    }
+    user_id = session["user_id"]
+
+    # Get user info from database
+    user_info = get_user_by_id(user_id)
+    if not user_info:
+        flash("User not found.", "error")
+        return redirect(url_for("login"))
+
+    # Read and validate date parameters
+    date_from_param = request.args.get("date_from")
+    date_to_param = request.args.get("date_to")
+    preset = request.args.get("preset")
+
+    date_from = _parse_date(date_from_param)
+    date_to = _parse_date(date_to_param)
+
+    # If preset is provided and dates are not explicitly given, use preset dates
+    if preset and not date_from_param and not date_to_param:
+        date_from, date_to = _get_preset_dates(preset)
+
+    # Validate date range
+    if date_from and date_to and date_from > date_to:
+        flash("Start date must be before end date.", "error")
+        date_from = None
+        date_to = None
+
+    # Convert back to string for query helpers and template
+    date_from_str = date_from.isoformat() if date_from else None
+    date_to_str = date_to.isoformat() if date_to else None
+
+    # Get summary stats
+    summary = get_summary_stats(user_id, date_from_str, date_to_str)
+
+    # Get recent transactions (limit 10)
+    recent_transactions = get_recent_transactions(user_id, limit=10, date_from=date_from_str, date_to=date_to_str)
+
+    # Get category breakdown
+    category_breakdown = get_category_breakdown(user_id, date_from_str, date_to_str)
+
+    # Determine active preset for highlighting
+    active_preset = None
+    if preset in ("this_month", "last_3_months", "last_6_months", "all"):
+        active_preset = preset
+    elif date_from and date_to:
+        active_preset = "custom"
+    elif not preset and not date_from_param and not date_to_param:
+        active_preset = "all"
+
+    # Determine filter period label for stats
+    if date_from and date_to:
+        if date_from == date_to:
+            period_label = date_from.strftime("%d %b %Y")
+        else:
+            period_label = f"{date_from.strftime('%d %b %Y')} - {date_to.strftime('%d %b %Y')}"
+    else:
+        period_label = "All time"
+
+    # Format stats for template
     stats = [
-        ("Total spent", "₹12,840", "This month"),
-        ("Transactions", "34", "Last 30 days"),
-        ("Top category", "Food", "₹4,550 spent"),
+        ("Total spent", f"₹{summary['total_spent']:,.2f}", period_label),
+        ("Transactions", str(summary['transaction_count']), period_label),
+        ("Top category", summary['top_category'], f"₹{summary['top_category_amount']:,.2f} spent" if summary['top_category'] != "—" else "No expenses yet"),
     ]
-    transactions = [
-        ("02 Mar", "Groceries at supermarket", "Food", "45.50"),
-        ("05 Mar", "Bus pass", "Transport", "22.00"),
-        ("08 Mar", "Electricity bill", "Bills", "120.00"),
-    ]
+
+    # Format transactions for template (date in DD Mon format)
+    transactions = []
+    for t in recent_transactions:
+        try:
+            dt = datetime.fromisoformat(t["date"])
+            date_str = dt.strftime("%d %b")
+        except ValueError:
+            date_str = t["date"]
+        transactions.append((
+            date_str,
+            t["description"],
+            t["category"],
+            f"{t['amount']:.2f}"
+        ))
+
+    # Format categories for template (name, formatted amount, width % for bar)
+    # Bar widths are based on the percentage of total expenses within the filtered period.
     categories = [
-        ("Food", "45.50"),
-        ("Transport", "22.00"),
-        ("Bills", "120.00"),
-        ("Health", "35.00"),
-        ("Entertainment", "55.00"),
+        (
+            cat["name"],
+            f"{cat['amount']:.2f}",
+            cat["pct"],
+        )
+        for cat in category_breakdown
     ]
+
+    # Generate preset URLs for template
+    preset_urls = {
+        "this_month": url_for("profile", preset="this_month"),
+        "last_3_months": url_for("profile", preset="last_3_months"),
+        "last_6_months": url_for("profile", preset="last_6_months"),
+        "all": url_for("profile"),
+    }
 
     return render_template(
         "profile.html",
-        profile=profile,
+        profile=user_info,
         stats=stats,
         transactions=transactions,
         categories=categories,
+        date_from=date_from_str,
+        date_to=date_to_str,
+        active_preset=active_preset,
+        preset_urls=preset_urls,
     )
 
 
