@@ -1,6 +1,13 @@
+from datetime import datetime
 from flask import Flask, render_template, request, redirect, url_for, session, flash
 from werkzeug.security import generate_password_hash, check_password_hash
 from database.db import get_db, init_db, seed_db
+from database.queries import (
+    get_user_by_id,
+    get_summary_stats,
+    get_recent_transactions,
+    get_category_breakdown,
+)
 
 app = Flask(__name__)
 app.secret_key = 'dev-secret-key-change-in-production'
@@ -140,33 +147,54 @@ def profile():
         flash("Please sign in to view your profile.", "error")
         return redirect(url_for("login"))
 
-    # Hardcoded context for the UI-first stub (Step 4).
-    profile = {
-        "name": "Demo User",
-        "email": "demo@spendly.com",
-        "member_since": "March 2025",
-    }
+    user_id = session["user_id"]
+
+    # Get user info from database
+    user_info = get_user_by_id(user_id)
+    if not user_info:
+        flash("User not found.", "error")
+        return redirect(url_for("login"))
+
+    # Get summary stats
+    summary = get_summary_stats(user_id)
+
+    # Get recent transactions (limit 10)
+    recent_transactions = get_recent_transactions(user_id, limit=10)
+
+    # Get category breakdown
+    category_breakdown = get_category_breakdown(user_id)
+
+    # Format stats for template
     stats = [
-        ("Total spent", "₹12,840", "This month"),
-        ("Transactions", "34", "Last 30 days"),
-        ("Top category", "Food", "₹4,550 spent"),
+        ("Total spent", f"₹{summary['total_spent']:,.2f}", "All time"),
+        ("Transactions", str(summary['transaction_count']), "All time"),
+        ("Top category", summary['top_category'], f"₹{summary['total_spent']:,.2f} spent" if summary['top_category'] != "—" else "No expenses yet"),
     ]
-    transactions = [
-        ("02 Mar", "Groceries at supermarket", "Food", "45.50"),
-        ("05 Mar", "Bus pass", "Transport", "22.00"),
-        ("08 Mar", "Electricity bill", "Bills", "120.00"),
-    ]
+
+    # Format transactions for template (date in DD Mon format)
+    transactions = []
+    for t in recent_transactions:
+        try:
+            dt = datetime.fromisoformat(t["date"])
+            date_str = dt.strftime("%d %b")
+        except ValueError:
+            date_str = t["date"]
+        transactions.append((
+            date_str,
+            t["description"],
+            t["category"],
+            f"{t['amount']:.2f}"
+        ))
+
+    # Format categories for template
     categories = [
-        ("Food", "45.50"),
-        ("Transport", "22.00"),
-        ("Bills", "120.00"),
-        ("Health", "35.00"),
-        ("Entertainment", "55.00"),
+        (cat["name"], f"{cat['amount']:.2f}")
+        for cat in category_breakdown
     ]
 
     return render_template(
         "profile.html",
-        profile=profile,
+        profile=user_info,
         stats=stats,
         transactions=transactions,
         categories=categories,
