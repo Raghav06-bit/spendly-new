@@ -20,7 +20,7 @@
             </a>
             <div class="nav-links">
                 {% if session.user_id %}
-                <a href="{{ url_for('logout') }}" class="nav-cta">Sign out</a>
+                <a href="{{ url_for('logout') }}" class="nav-cta" id="signOutBtn">Sign out</a>
                 {% else %}
                 <a href="{{ url_for('login') }}">Sign in</a>
                 <a href="{{ url_for('register') }}" class="nav-cta">Get started</a>
@@ -65,8 +65,67 @@
                     }, 500);
                 }, 5000);
             });
+
+            // Sign out confirmation modal
+            const signOutBtn = document.getElementById('signOutBtn');
+            const signOutModal = document.getElementById('signOutModal');
+            const closeModal = document.querySelector('.close-modal');
+            const cancelSignOut = document.getElementById('cancelSignOut');
+            const confirmSignOut = document.getElementById('confirmSignOut');
+            const signOutForm = document.getElementById('signOutForm');
+
+            if (signOutBtn) {
+                signOutBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    signOutModal.style.display = 'block';
+                });
+            }
+
+            if (closeModal) {
+                closeModal.addEventListener('click', function() {
+                    signOutModal.style.display = 'none';
+                });
+            }
+
+            if (cancelSignOut) {
+                cancelSignOut.addEventListener('click', function() {
+                    signOutModal.style.display = 'none';
+                });
+            }
+
+            if (confirmSignOut) {
+                confirmSignOut.addEventListener('click', function() {
+                    signOutForm.submit();
+                });
+            }
+
+            // Close modal when clicking outside
+            window.addEventListener('click', function(e) {
+                if (e.target === signOutModal) {
+                    signOutModal.style.display = 'none';
+                }
+            });
         });
     </script>
+
+    <!-- Sign out confirmation modal -->
+    <div id="signOutModal" class="modal">
+        <div class="modal-content modal-signout">
+            <div class="modal-header">
+                <h3>Sign out</h3>
+                <button class="close-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to sign out of Spendly?</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="cancelSignOut">Cancel</button>
+                <form id="signOutForm" action="{{ url_for('logout') }}" method="POST" class="inline-form">
+                    <button type="submit" class="btn btn-primary" id="confirmSignOut">Sign out</button>
+                </form>
+            </div>
+        </div>
+    </div>
     {% block scripts %}{% endblock %}
 </body>
 </html>

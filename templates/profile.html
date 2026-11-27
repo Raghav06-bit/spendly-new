@@ -1,0 +1,227 @@
+{% extends "base.html" %}
+
+{% block title %}Your profile — Spendly{% endblock %}
+
+{% block head %}
+<style>
+    .profile-section {
+        padding: 3rem 2rem 4rem;
+        max-width: var(--max-width);
+        margin: 0 auto;
+    }
+
+    .profile-header {
+        display: flex;
+        align-items: center;
+        gap: 1.5rem;
+        margin-bottom: 3rem;
+    }
+
+    .profile-avatar {
+        width: 64px;
+        height: 64px;
+        background: var(--accent);
+        color: var(--paper);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: var(--font-display);
+        font-size: 1.5rem;
+        font-weight: 600;
+        flex-shrink: 0;
+    }
+
+    .profile-info h2 {
+        font-family: var(--font-display);
+        font-size: 1.5rem;
+        color: var(--ink);
+        margin-bottom: 0.25rem;
+    }
+
+    .profile-info p {
+        font-size: 0.9rem;
+        color: var(--ink-muted);
+    }
+
+    .profile-stats {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1.5rem;
+        margin-bottom: 3rem;
+    }
+
+    .stat-card {
+        background: var(--paper-card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        padding: 1.5rem;
+    }
+
+    .stat-label {
+        font-size: 0.8rem;
+        color: var(--ink-muted);
+        margin-bottom: 0.5rem;
+    }
+
+    .stat-value {
+        font-size: 1.5rem;
+        font-weight: 600;
+        color: var(--ink);
+        margin-bottom: 0.25rem;
+    }
+
+    .stat-sub {
+        font-size: 0.75rem;
+        color: var(--ink-faint);
+    }
+
+    .profile-grid {
+        display: grid;
+        grid-template-columns: 2fr 1fr;
+        gap: 2rem;
+    }
+
+    .profile-card {
+        background: var(--paper-card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        padding: 2rem;
+    }
+
+    .card-title {
+        font-family: var(--font-display);
+        font-size: 1.1rem;
+        color: var(--ink);
+        margin-bottom: 1.5rem;
+    }
+
+    .history-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .history-table th {
+        text-align: left;
+        font-size: 0.75rem;
+        color: var(--ink-muted);
+        font-weight: 500;
+        padding-bottom: 0.75rem;
+        border-bottom: 1px solid var(--border-soft);
+    }
+
+    .history-table td {
+        padding: 0.75rem 0;
+        font-size: 0.85rem;
+        color: var(--ink-soft);
+        border-bottom: 1px solid var(--border-soft);
+    }
+
+    .history-table tr:last-child td {
+        border-bottom: none;
+    }
+
+    .category-badge {
+        display: inline-block;
+        padding: 0.2rem 0.6rem;
+        border-radius: var(--radius-sm);
+        font-size: 0.75rem;
+        font-weight: 500;
+        background: var(--accent-light);
+        color: var(--accent);
+    }
+
+    .category-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+
+    .category-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 0.85rem;
+    }
+
+    .category-name {
+        color: var(--ink-soft);
+    }
+
+    .category-amount {
+        color: var(--ink);
+        font-weight: 500;
+    }
+
+    @media (max-width: 768px) {
+        .profile-stats {
+            grid-template-columns: 1fr;
+        }
+        .profile-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<section class="profile-section">
+    <div class="profile-header">
+        <div class="profile-avatar">{{ profile.name[0] }}</div>
+        <div class="profile-info">
+            <h2>{{ profile.name }}</h2>
+            <p>{{ profile.email }} · Member since {{ profile.member_since }}</p>
+        </div>
+    </div>
+
+    <div class="profile-stats">
+        {% for stat in stats %}
+        <div class="stat-card">
+            <div class="stat-label">{{ stat[0] }}</div>
+            <div class="stat-value">{{ stat[1] }}</div>
+            <div class="stat-sub">{{ stat[2] }}</div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="profile-grid">
+        <div class="profile-card">
+            <h3 class="card-title">Recent transactions</h3>
+            <table class="history-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Description</th>
+                        <th>Category</th>
+                        <th>Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for transaction in transactions %}
+                    <tr>
+                        <td>{{ transaction[0] }}</td>
+                        <td>{{ transaction[1] }}</td>
+                        <td><span class="category-badge">{{ transaction[2] }}</span></td>
+                        <td>₹{{ transaction[3] }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="profile-card">
+            <h3 class="card-title">Category breakdown</h3>
+            <div class="category-list">
+                {% for category in categories %}
+                <div class="category-item">
+                    <span class="category-name">{{ category[0] }}</span>
+                    <span class="category-amount">₹{{ category[1] }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</section>
+
+{% endblock %}

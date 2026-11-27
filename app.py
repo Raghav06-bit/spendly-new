@@ -66,7 +66,7 @@ def register():
             session["user_name"] = name
 
             flash("Registration successful! Welcome to Spendly.", "success")
-            return redirect(url_for("landing"))
+            return redirect(url_for("profile"))
         finally:
             conn.close()
 
@@ -106,7 +106,7 @@ def login():
             session["user_name"] = user["name"]
 
             flash(f"Welcome back, {user['name']}!", "success")
-            return redirect(url_for("landing"))
+            return redirect(url_for("profile"))
         finally:
             conn.close()
 
@@ -127,7 +127,7 @@ def privacy():
 # Placeholder routes — students will implement these                  #
 # ------------------------------------------------------------------ #
 
-@app.route("/logout")
+@app.route("/logout", methods=["GET", "POST"])
 def logout():
     session.clear()
     flash("You have been signed out.", "success")
@@ -136,7 +136,41 @@ def logout():
 
 @app.route("/profile")
 def profile():
-    return "Profile page — coming in Step 4"
+    if "user_id" not in session:
+        flash("Please sign in to view your profile.", "error")
+        return redirect(url_for("login"))
+
+    # Hardcoded context for the UI-first stub (Step 4).
+    profile = {
+        "name": "Demo User",
+        "email": "demo@spendly.com",
+        "member_since": "March 2025",
+    }
+    stats = [
+        ("Total spent", "₹12,840", "This month"),
+        ("Transactions", "34", "Last 30 days"),
+        ("Top category", "Food", "₹4,550 spent"),
+    ]
+    transactions = [
+        ("02 Mar", "Groceries at supermarket", "Food", "45.50"),
+        ("05 Mar", "Bus pass", "Transport", "22.00"),
+        ("08 Mar", "Electricity bill", "Bills", "120.00"),
+    ]
+    categories = [
+        ("Food", "45.50"),
+        ("Transport", "22.00"),
+        ("Bills", "120.00"),
+        ("Health", "35.00"),
+        ("Entertainment", "55.00"),
+    ]
+
+    return render_template(
+        "profile.html",
+        profile=profile,
+        stats=stats,
+        transactions=transactions,
+        categories=categories,
+    )
 
 
 @app.route("/expenses/add")
