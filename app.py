@@ -1,3 +1,4 @@
+import os
 from datetime import datetime
 from flask import Flask, render_template, request, redirect, url_for, session, flash
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -10,7 +11,7 @@ from database.queries import (
 )
 
 app = Flask(__name__)
-app.secret_key = 'dev-secret-key-change-in-production'
+app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
 
 # Initialize database on startup
 with app.app_context():
@@ -53,7 +54,6 @@ def register():
             ).fetchone()
 
             if existing:
-                conn.close()
                 return render_template(
                     "register.html",
                     error="Email address is already registered.",
@@ -94,11 +94,11 @@ def login():
                 email=email,
             )
 
-        # Look up user by email (case-insensitive)
+        # Look up user by email (emails stored lowercase)
         conn = get_db()
         try:
             user = conn.execute(
-                "SELECT * FROM users WHERE LOWER(email) = LOWER(?)", (email,)
+                "SELECT * FROM users WHERE email = ?", (email,)
             ).fetchone()
 
             if not user or not check_password_hash(user["password_hash"], password):
@@ -168,7 +168,7 @@ def profile():
     stats = [
         ("Total spent", f"₹{summary['total_spent']:,.2f}", "All time"),
         ("Transactions", str(summary['transaction_count']), "All time"),
-        ("Top category", summary['top_category'], f"₹{summary['total_spent']:,.2f} spent" if summary['top_category'] != "—" else "No expenses yet"),
+        ("Top category", summary['top_category'], f"₹{summary['top_category_amount']:,.2f} spent" if summary['top_category'] != "—" else "No expenses yet"),
     ]
 
     # Format transactions for template (date in DD Mon format)

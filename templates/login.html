@@ -23,7 +23,7 @@
                     <input type="email" id="email" name="email"
                            class="form-input" placeholder="nitish@example.com"
                            required autofocus
-                           value="{{ email }}">
+                           value="{{ request.form.get('email', '') }}">
                 </div>
                 <div class="form-group">
                     <label for="password">Password</label>

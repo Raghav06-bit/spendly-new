@@ -32,7 +32,7 @@ def get_user_by_id(user_id):
 
 
 def get_summary_stats(user_id):
-    """Return dict with total_spent, transaction_count, top_category for a user."""
+    """Return dict with total_spent, transaction_count, top_category, top_category_amount for a user."""
     conn = get_db()
     try:
         # Get total spent and transaction count
@@ -54,11 +54,13 @@ def get_summary_stats(user_id):
         ).fetchone()
 
         top_category = top_cat_row["category"] if top_cat_row else "—"
+        top_category_amount = top_cat_row["cat_total"] if top_cat_row else 0
 
         return {
             "total_spent": total_spent,
             "transaction_count": transaction_count,
-            "top_category": top_category
+            "top_category": top_category,
+            "top_category_amount": top_category_amount
         }
     finally:
         conn.close()
@@ -119,7 +121,19 @@ def get_category_breakdown(user_id):
         total_pct = sum(item["pct"] for item in breakdown)
         if total_pct != 100 and breakdown:
             diff = 100 - total_pct
-            breakdown[0]["pct"] += diff
+            # Distribute diff across categories starting from largest
+            # to avoid negative percentages when diff is negative
+            i = 0
+            while diff != 0 and i < len(breakdown):
+                if diff > 0 or breakdown[i]["pct"] > 0:
+                    # Only adjust if we're adding or if category has positive pct
+                    new_pct = breakdown[i]["pct"] + diff
+                    if new_pct >= 0:
+                        breakdown[i]["pct"] = new_pct
+                        diff = 0
+                    else:
+                        diff = new_pct  # remaining negative diff
+                i += 1
 
         return breakdown
     finally:
