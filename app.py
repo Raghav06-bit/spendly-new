@@ -141,6 +141,45 @@ def logout():
     return redirect(url_for("landing"))
 
 
+def _parse_date(date_str):
+    """Parse ISO date string, return None if invalid."""
+    if not date_str:
+        return None
+    try:
+        return datetime.strptime(date_str, "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+def _get_preset_dates(preset):
+    """Return (date_from, date_to) tuple for a preset, or (None, None) for 'all'."""
+    today = datetime.now().date()
+    if preset == "this_month":
+        date_from = today.replace(day=1)
+        date_to = today
+    elif preset == "last_3_months":
+        # 3 months ago, first day of that month
+        month = today.month - 3
+        year = today.year
+        if month <= 0:
+            month += 12
+            year -= 1
+        date_from = today.replace(year=year, month=month, day=1)
+        date_to = today
+    elif preset == "last_6_months":
+        # 6 months ago, first day of that month
+        month = today.month - 6
+        year = today.year
+        if month <= 0:
+            month += 12
+            year -= 1
+        date_from = today.replace(year=year, month=month, day=1)
+        date_to = today
+    else:  # "all" or unknown
+        return None, None
+    return date_from, date_to
+
+
 @app.route("/profile")
 def profile():
     if "user_id" not in session:
@@ -155,19 +194,59 @@ def profile():
         flash("User not found.", "error")
         return redirect(url_for("login"))
 
+    # Read and validate date parameters
+    date_from_param = request.args.get("date_from")
+    date_to_param = request.args.get("date_to")
+    preset = request.args.get("preset")
+
+    date_from = _parse_date(date_from_param)
+    date_to = _parse_date(date_to_param)
+
+    # If preset is provided and dates are not explicitly given, use preset dates
+    if preset and not date_from_param and not date_to_param:
+        date_from, date_to = _get_preset_dates(preset)
+
+    # Validate date range
+    if date_from and date_to and date_from > date_to:
+        flash("Start date must be before end date.", "error")
+        date_from = None
+        date_to = None
+
+    # Convert back to string for query helpers and template
+    date_from_str = date_from.isoformat() if date_from else None
+    date_to_str = date_to.isoformat() if date_to else None
+
     # Get summary stats
-    summary = get_summary_stats(user_id)
+    summary = get_summary_stats(user_id, date_from_str, date_to_str)
 
     # Get recent transactions (limit 10)
-    recent_transactions = get_recent_transactions(user_id, limit=10)
+    recent_transactions = get_recent_transactions(user_id, limit=10, date_from=date_from_str, date_to=date_to_str)
 
     # Get category breakdown
-    category_breakdown = get_category_breakdown(user_id)
+    category_breakdown = get_category_breakdown(user_id, date_from_str, date_to_str)
+
+    # Determine active preset for highlighting
+    active_preset = None
+    if preset in ("this_month", "last_3_months", "last_6_months", "all"):
+        active_preset = preset
+    elif date_from and date_to:
+        active_preset = "custom"
+    elif not preset and not date_from_param and not date_to_param:
+        active_preset = "all"
+
+    # Determine filter period label for stats
+    if date_from and date_to:
+        if date_from == date_to:
+            period_label = date_from.strftime("%d %b %Y")
+        else:
+            period_label = f"{date_from.strftime('%d %b %Y')} - {date_to.strftime('%d %b %Y')}"
+    else:
+        period_label = "All time"
 
     # Format stats for template
     stats = [
-        ("Total spent", f"₹{summary['total_spent']:,.2f}", "All time"),
-        ("Transactions", str(summary['transaction_count']), "All time"),
+        ("Total spent", f"₹{summary['total_spent']:,.2f}", period_label),
+        ("Transactions", str(summary['transaction_count']), period_label),
         ("Top category", summary['top_category'], f"₹{summary['top_category_amount']:,.2f} spent" if summary['top_category'] != "—" else "No expenses yet"),
     ]
 
@@ -192,12 +271,24 @@ def profile():
         for cat in category_breakdown
     ]
 
+    # Generate preset URLs for template
+    preset_urls = {
+        "this_month": url_for("profile", preset="this_month"),
+        "last_3_months": url_for("profile", preset="last_3_months"),
+        "last_6_months": url_for("profile", preset="last_6_months"),
+        "all": url_for("profile"),
+    }
+
     return render_template(
         "profile.html",
         profile=user_info,
         stats=stats,
         transactions=transactions,
         categories=categories,
+        date_from=date_from_str,
+        date_to=date_to_str,
+        active_preset=active_preset,
+        preset_urls=preset_urls,
     )
 
 
